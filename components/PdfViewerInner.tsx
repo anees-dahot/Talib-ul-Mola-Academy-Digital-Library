@@ -1,9 +1,9 @@
 "use client";
 
-import { Document, Page, pdfjs } from "react-pdf";
+import { Document, Page, pdfjs } from "react-pdf"; // Directly import
 import { useState, useEffect, useCallback, useRef } from "react";
+import "react-pdf/dist/Page/AnnotationLayer.css"; // Keep CSS imports direct for now
 import "react-pdf/dist/Page/TextLayer.css";
-import "react-pdf/dist/Page/AnnotationLayer.css";
 
 // 🔥 Use MJS worker (required for Next 15)
 pdfjs.GlobalWorkerOptions.workerSrc =
@@ -13,6 +13,7 @@ interface Highlight {
   id: string;
   page: number;
   text: string;
+  // For full implementation, would include coordinates/range for precise rendering
 }
 
 interface Comment {
@@ -27,18 +28,21 @@ interface PdfViewerInnerProps {
   bookId: string;
 }
 
+// Function to get window.innerWidth safely
+const getWindowWidth = () => typeof window !== "undefined" ? window.innerWidth : 800;
+
 export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
-  const [comments, setComments] = useState<Comment[]>([]); // New state for comments
+  const [comments, setComments] = useState<Comment[]>([]);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   const localStorageProgressKey = `pdf_progress_${bookId}`;
   const localStorageHighlightsKey = `pdf_highlights_${bookId}`;
-  const localStorageCommentsKey = `pdf_comments_${bookId}`; // New key for comments
+  const localStorageCommentsKey = `pdf_comments_${bookId}`;
 
   // --- Resume Reading Logic & Initial Data Load ---
   useEffect(() => {
@@ -51,7 +55,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
       if (savedHighlights) {
         setHighlights(JSON.parse(savedHighlights));
       }
-      const savedComments = localStorage.getItem(localStorageCommentsKey); // Load comments
+      const savedComments = localStorage.getItem(localStorageCommentsKey);
       if (savedComments) {
         setComments(JSON.parse(savedComments));
       }
@@ -64,6 +68,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
     }
   }, [pageNumber, bookId, localStorageProgressKey]);
   // --- End Resume Reading Logic ---
+
 
   // --- Highlighting Logic ---
   const handleHighlightSelection = useCallback(() => {
@@ -96,7 +101,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
     const selectedText = selection?.toString().trim();
 
     if (selectedText && selectedText.length > 0) {
-      const commentInput = prompt(`Enter your comment for: "${selectedText.substring(0, 50)}..."`);
+      const commentInput = prompt(`Enter your comment for: "${selectedText.substring(0, Math.min(selectedText.length, 50))}..."`);
       if (commentInput !== null && commentInput.trim().length > 0) {
         const newComment: Comment = {
           id: crypto.randomUUID(),
@@ -118,10 +123,10 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
   // --- End Commenting Logic ---
 
 
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
+  const onDocumentLoadSuccess = useCallback(({ numPages: totalPages }: { numPages: number }) => {
+    setNumPages(totalPages);
     setLoading(false);
-    setPageNumber((prevPage) => Math.min(prevPage, numPages));
+    setPageNumber((prevPage) => Math.min(prevPage, totalPages));
   }, []);
 
   const onDocumentLoadError = useCallback((err: Error) => {
@@ -142,14 +147,26 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
     return <p className="text-red-500 text-center py-8">PDF not available</p>;
   }
 
+  // Show loading for PDF library components
+  // Removed the PdfDocumentComponent etc. checks
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mx-auto mb-2"></div>
+          <p className="text-gray-500 text-sm">Loading PDF...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return <p className="text-red-500 text-center py-8">{error}</p>;
   }
 
+  // Directly use Document and Page from top-level import
   return (
     <div className="flex flex-col items-center p-4">
-      {loading && <p className="text-gray-600">Loading PDF...</p>}
-
       <div className="flex items-center justify-center space-x-4 mb-4">
         <button
           onClick={goToPrevPage}
@@ -192,12 +209,14 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
         >
           <Page
             pageNumber={pageNumber}
-            width={Math.min(window.innerWidth * 0.9, 800)}
+            width={Math.min(getWindowWidth() * 0.9, 800)}
             onRenderSuccess={() => setLoading(false)}
+            renderTextLayer={true}
+            renderAnnotationLayer={true}
           />
         </Document>
 
-        {/* Display highlights in a simple list for now */}
+        {/* Display annotations in a simple list for now */}
         {(highlights.filter(h => h.page === pageNumber).length > 0 || comments.filter(c => c.page === pageNumber).length > 0) && (
           <div className="absolute top-0 right-0 p-2 bg-white bg-opacity-80 border-l border-b border-gray-200 z-10 max-h-48 overflow-y-auto w-64">
             <h3 className="font-semibold mb-1">Annotations on this page:</h3>
