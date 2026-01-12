@@ -12,7 +12,7 @@ const books = [
     title: "Anta Mahboobi",
     author: "Makhdoom Jameel Zaman",
     category: "Islamic Studies",
-    pdfPath: "https://www.africau.edu/images/default/sample.pdf", // Added pdfPath
+    pdfPath: "https://raw.githubusercontent.com/anees-dahot/talib-ul-mola-pdfs/master/sample.pdf",
   },
   {
     id: 2,
@@ -20,7 +20,7 @@ const books = [
     title: "The Genealogies",
     author: "Makhdoom Jameel Zaman",
     category: "History",
-    pdfPath: "https://www.africau.edu/images/default/sample.pdf", // Added pdfPath
+    pdfPath: "https://raw.githubusercontent.com/anees-dahot/talib-ul-mola-pdfs/master/sample.pdf",
   },
   {
     id: 3,
@@ -28,7 +28,7 @@ const books = [
     title: "The Days & Dates",
     author: "Makhdoom Jamil Zaman",
     category: "Reference",
-    pdfPath: "https://www.africau.edu/images/default/sample.pdf", // Added pdfPath
+    pdfPath: "https://raw.githubusercontent.com/anees-dahot/talib-ul-mola-pdfs/master/sample.pdf",
   },
   {
     id: 4,
@@ -36,7 +36,7 @@ const books = [
     title: "Tazkirah Hazrat Abu Najeeb",
     author: "Moulana Hussain Miyan",
     category: "Biography",
-    pdfPath: "https://www.africau.edu/images/default/sample.pdf", // Added pdfPath
+    pdfPath: "https://raw.githubusercontent.com/anees-dahot/talib-ul-mola-pdfs/master/sample.pdf",
   },
   {
     id: 5,
@@ -44,7 +44,7 @@ const books = [
     title: "Hazar Siddiq Akbar",
     author: "Makhdoom Jameel Zaman",
     category: "Islamic Studies",
-    pdfPath: "https://www.africau.edu/images/default/sample.pdf", // Added pdfPath
+    pdfPath: "https://raw.githubusercontent.com/anees-dahot/talib-ul-mola-pdfs/master/sample.pdf",
   },
   {
     id: 6,
@@ -52,7 +52,7 @@ const books = [
     title: "Chaudahween Sadi",
     author: "Mufti Abdul Wahab",
     category: "Sindhi Lit",
-    pdfPath: "https://www.africau.edu/images/default/sample.pdf", // Added pdfPath
+    pdfPath: "https://raw.githubusercontent.com/anees-dahot/talib-ul-mola-pdfs/master/sample.pdf",
   },
 ];
 
