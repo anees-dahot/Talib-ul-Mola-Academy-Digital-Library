@@ -1,7 +1,7 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf"; // Directly import
-import { useState, useEffect, useCallback, useRef } from "react";
 import "react-pdf/dist/Page/AnnotationLayer.css"; // Keep CSS imports direct for now
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -21,7 +21,7 @@ interface Comment {
   page: number;
   textSelection: string; // The text the comment is attached to
   commentText: string;
-  position?: { x: number; y: number }; // Position for the comment icon
+  position?: { x: number; y: number }; // Position as percentage (0-100) of PDF page dimensions
 }
 
 interface PdfViewerInnerProps {
@@ -40,7 +40,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [retryKey, setRetryKey] = useState(0);
-  const [scale, setScale] = useState(1.0);
+  const [scale, setScale] = useState(1.1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
   const [highlightColor, setHighlightColor] = useState("#FFEB3B"); // Default yellow
@@ -78,7 +78,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
         setScale((prev) => Math.max(prev - 0.2, 0.5));
       } else if (e.key === "0") {
         e.preventDefault();
-        setScale(1.0);
+        setScale(1.1);
       }
       // Fullscreen toggle
       else if (e.key === "f" || e.key === "F") {
@@ -121,6 +121,24 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
     }
   }, [pageNumber, bookId, localStorageProgressKey]);
   // --- End Resume Reading Logic ---
+
+  // --- Delete handlers (must be before useEffect that uses them) ---
+  const handleDeleteHighlight = useCallback((id: string) => {
+    setHighlights((prev) => {
+      const updated = prev.filter(h => h.id !== id);
+      localStorage.setItem(localStorageHighlightsKey, JSON.stringify(updated));
+      return updated;
+    });
+  }, [localStorageHighlightsKey]);
+
+  const handleDeleteComment = useCallback((id: string) => {
+    setComments((prev) => {
+      const updated = prev.filter(c => c.id !== id);
+      localStorage.setItem(localStorageCommentsKey, JSON.stringify(updated));
+      return updated;
+    });
+  }, [localStorageCommentsKey]);
+  // --- End Delete handlers ---
 
   // --- Apply Highlights to Text Layer ---
   useEffect(() => {
@@ -194,7 +212,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
     }, 300); // Wait for text layer to render
 
     return () => clearTimeout(timer);
-  }, [highlights, pageNumber]);
+  }, [highlights, pageNumber, handleDeleteHighlight]);
 
 
   // --- Highlighting Logic ---
@@ -204,7 +222,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim();
 
-    if (selectedText && selectedText.length > 0) {
+    if (selectedText && selectedText.length > 0 && selection && selection.rangeCount > 0) {
       // Get the range and bounding rectangles for visual overlay
       const range = selection.getRangeAt(0);
       const rects = Array.from(range.getClientRects());
@@ -242,11 +260,15 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim();
 
-    if (selectedText && selectedText.length > 0) {
-      // Get position for the comment icon
+    if (selectedText && selectedText.length > 0 && selection && selection.rangeCount > 0) {
+      // Get position for the comment icon - store as percentage of PDF dimensions
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const containerRect = pdfContainerRef.current?.getBoundingClientRect();
+
+      // Find the actual PDF page element to get its dimensions
+      const pdfPage = document.querySelector('.react-pdf__Page');
+      const pageRect = pdfPage?.getBoundingClientRect();
 
       const commentInput = prompt(`Enter your comment for: "${selectedText.substring(0, Math.min(selectedText.length, 50))}..."`);
       if (commentInput !== null && commentInput.trim().length > 0) {
@@ -255,9 +277,10 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
           page: pageNumber,
           textSelection: selectedText,
           commentText: commentInput.trim(),
-          position: containerRect ? {
-            x: rect.right - containerRect.left,
-            y: rect.top - containerRect.top
+          position: (containerRect && pageRect) ? {
+            // Store as percentage of page dimensions for zoom consistency
+            x: ((rect.left - pageRect.left + 10) / pageRect.width) * 100,
+            y: ((rect.top - pageRect.top + (rect.height / 2)) / pageRect.height) * 100
           } : undefined,
         };
         setComments((prev) => {
@@ -324,7 +347,7 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
   }, []);
 
   const handleResetZoom = useCallback(() => {
-    setScale(1.0);
+    setScale(1.1);
   }, []);
 
   const toggleFullscreen = useCallback(() => {
@@ -343,22 +366,6 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
       setPageNumber(value);
     }
   }, [numPages]);
-
-  const handleDeleteHighlight = useCallback((id: string) => {
-    setHighlights((prev) => {
-      const updated = prev.filter(h => h.id !== id);
-      localStorage.setItem(localStorageHighlightsKey, JSON.stringify(updated));
-      return updated;
-    });
-  }, [localStorageHighlightsKey]);
-
-  const handleDeleteComment = useCallback((id: string) => {
-    setComments((prev) => {
-      const updated = prev.filter(c => c.id !== id);
-      localStorage.setItem(localStorageCommentsKey, JSON.stringify(updated));
-      return updated;
-    });
-  }, [localStorageCommentsKey]);
 
   if (!pdfUrl) {
     return <p className="text-red-500 text-center py-8">PDF not available</p>;
@@ -530,14 +537,15 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
         </div>
       </div>
 
-      <div ref={pdfContainerRef} className="w-full max-w-4xl border border-gray-300 shadow-lg rounded-lg overflow-hidden relative">
-        <Document
-          key={retryKey}
-          file={pdfUrl}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          onLoadProgress={({ loaded, total }) => console.log(`📥 Loading PDF: ${loaded}/${total} bytes`)}
-          className="flex justify-center"
+      <div ref={pdfContainerRef} className="w-full max-w-4xl border border-gray-300 shadow-lg rounded-lg relative">
+        <div className="overflow-hidden rounded-lg">
+          <Document
+            key={retryKey}
+            file={pdfUrl}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={onDocumentLoadError}
+            onLoadProgress={({ loaded, total }) => console.log(`📥 Loading PDF: ${loaded}/${total} bytes`)}
+            className="flex justify-center"
           loading={
             <div className="flex items-center justify-center p-8">
               <div className="text-center">
@@ -565,35 +573,49 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
               </div>
             }
           />
-        </Document>
+          </Document>
+        </div>
 
         {/* Comment Icons Overlay */}
-        {comments.filter(c => c.page === pageNumber && c.position).map(comment => (
-          <div
-            key={comment.id}
-            className="absolute cursor-pointer group"
-            style={{
-              left: `${comment.position!.x}px`,
-              top: `${comment.position!.y}px`,
-              transform: 'translate(-50%, -50%)',
-            }}
-            onClick={() => setSelectedComment(comment)}
-            title="Click to view comment"
-          >
-            <div className="relative">
-              <svg
-                className="w-6 h-6 text-blue-600 drop-shadow-md hover:text-blue-800 transition-colors"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <circle cx="10" cy="10" r="9" fill="white" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"/>
-              </svg>
-              {/* Small pulse animation on hover */}
-              <span className="absolute top-0 right-0 w-2 h-2 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-ping"></span>
+        {comments.filter(c => c.page === pageNumber && c.position).map(comment => {
+          // Get current PDF page dimensions to convert percentage to pixels
+          const pdfPage = document.querySelector('.react-pdf__Page');
+          const pageRect = pdfPage?.getBoundingClientRect();
+
+          if (!pageRect) return null;
+
+          // Convert percentage back to pixels based on current page size
+          const xPos = (comment.position!.x / 100) * pageRect.width;
+          const yPos = (comment.position!.y / 100) * pageRect.height;
+
+          return (
+            <div
+              key={comment.id}
+              className="absolute cursor-pointer group pointer-events-auto"
+              style={{
+                left: `${xPos}px`,
+                top: `${yPos}px`,
+                transform: 'translate(0, -50%)',
+                zIndex: 40,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedComment(comment);
+              }}
+              title="Click to view comment"
+            >
+              <div className="relative bg-blue-600 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:scale-110 transition-all">
+                <svg
+                  className="w-5 h-5 text-white"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
+                </svg>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Comment Dialog Popover */}
         {selectedComment && (
@@ -667,9 +689,11 @@ export default function PdfViewerInner({ pdfUrl, bookId }: PdfViewerInnerProps) 
           </button>
         )}
 
-        {/* Enhanced Annotations Sidebar */}
+        {/* Enhanced Annotations Sidebar - Outside PDF on desktop, overlay on mobile */}
         {(highlights.filter(h => h.page === pageNumber).length > 0 || comments.filter(c => c.page === pageNumber).length > 0) && (
-          <div className={`absolute top-0 right-0 p-3 bg-white bg-opacity-95 backdrop-blur-sm border-l border-b border-gray-200 shadow-lg z-10 max-h-96 overflow-y-auto w-80 transition-transform ${showSidebar ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+          <div className={`fixed md:absolute top-20 md:top-0 right-0 md:-right-0 md:translate-x-full p-4 bg-white border border-gray-200 shadow-xl z-50 max-h-[600px] md:max-h-96 overflow-y-auto w-80 rounded-l-lg md:rounded-lg transition-transform duration-300 ${
+            showSidebar ? 'translate-x-0' : 'translate-x-full'
+          } md:translate-x-full`}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-brand-900 flex items-center">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
